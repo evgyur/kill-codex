@@ -59,23 +59,21 @@ Kill-Codex.exe --dry-run
 
 ## Сборка из исходников
 
-Нужен [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0) и Windows 10/11 x64.
+Нужны [Rust](https://rustup.rs/), [Zig](https://ziglang.org/) и Windows 10/11 x64.
 
 ```powershell
 git clone https://github.com/evgyur/kill-codex.git
 cd kill-codex
-dotnet publish -c Release -r win-x64 --self-contained true `
-  -p:PublishSingleFile=true `
-  -p:IncludeNativeLibrariesForSelfExtract=true `
-  -o publish
+rustup default stable-x86_64-pc-windows-gnu
+cargo build --release
 ```
 
-Готовый автономный файл появится в `publish/CodexProcessKiller.exe`. Установленный .NET для запуска не требуется.
+Готовый автономный файл появится в `target/release/kill-codex.exe`. Для запуска не нужны Rust, .NET или дополнительные библиотеки.
 
 ## Что внутри
 
-- C# + WinForms;
-- один self-contained `.exe`;
+- Rust + прямые вызовы Win32 API;
+- один нативный `.exe` размером меньше 500 КБ;
 - завершение всего дерева каждого найденного процесса;
 - отдельный отчёт по успешным завершениям и ошибкам;
 - никаких зависимостей, телеметрии и сетевых запросов.
