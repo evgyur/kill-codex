@@ -1,6 +1,6 @@
 # Multi-App Process Killer Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Turn the existing one-button Kill Codex utility into a safe four-button native Windows process killer for Codex, Amnezia, Discord, and Chrome, including Amnezia service shutdown.
 
@@ -26,7 +26,7 @@
 **Files:**
 - Modify: `src/main.rs`
 
-- [ ] **Step 1: Add failing target and CLI tests**
+- [x] **Step 1: Add failing target and CLI tests**
 
 Add tests covering all direct-name predicates, predicate isolation, button IDs, default dry-run target, explicit target parsing, and rejection of unknown/extra arguments:
 
@@ -54,7 +54,7 @@ fn parses_dry_run_grammar_strictly() {
 }
 ```
 
-- [ ] **Step 2: Run focused tests and confirm red**
+- [x] **Step 2: Run focused tests and confirm red**
 
 Run: `cargo test matches_each_target_without_cross_matching`
 
@@ -62,7 +62,7 @@ Run: `cargo test parses_dry_run_grammar_strictly`
 
 Expected: compilation fails because `AppTarget`, `RunMode`, and `parse_args` are not defined.
 
-- [ ] **Step 3: Implement target metadata and parser**
+- [x] **Step 3: Implement target metadata and parser**
 
 Add `AppTarget::{Codex, Amnezia, Discord, Chrome}`, stable control IDs `1001..=1004`, `label`, `display_name`, `matches_process`, `from_button_id`, and `from_name`. Add:
 
@@ -92,13 +92,13 @@ where
 }
 ```
 
-- [ ] **Step 4: Run the target tests**
+- [x] **Step 4: Run the target tests**
 
 Run: `cargo test`
 
 Expected: all target/parser tests and the two existing tests pass.
 
-- [ ] **Step 5: Commit the target model**
+- [x] **Step 5: Commit the target model**
 
 Run: `git add src/main.rs && git commit -m "feat: add multi-app target model"`
 
@@ -107,7 +107,7 @@ Run: `git add src/main.rs && git commit -m "feat: add multi-app target model"`
 **Files:**
 - Modify: `src/main.rs`
 
-- [ ] **Step 1: Add failing pure graph and result tests**
+- [x] **Step 1: Add failing pure graph and result tests**
 
 Cover direct matches, generic descendants, cross-named descendants, self exclusion, invalid creation-time edges, and stale second-snapshot candidates:
 
@@ -140,7 +140,7 @@ fn rejects_stale_or_impossible_parent_edges() {
 }
 ```
 
-- [ ] **Step 2: Confirm the new safety tests fail**
+- [x] **Step 2: Confirm the new safety tests fail**
 
 Run: `cargo test validates_selected_graph_against_second_snapshot`
 
@@ -148,7 +148,7 @@ Run: `cargo test rejects_stale_or_impossible_parent_edges`
 
 Expected: compilation fails because the validated graph helper and pinned-time model are absent.
 
-- [ ] **Step 3: Implement pinned handle ownership and two-snapshot validation**
+- [x] **Step 3: Implement pinned handle ownership and two-snapshot validation**
 
 Add an RAII handle wrapper and process candidate type:
 
@@ -176,13 +176,13 @@ The process engine must:
 7. issue termination to all retained handles before waiting;
 8. use one three-second deadline with `WaitForSingleObject` and report confirmed, timed out, or failed results.
 
-- [ ] **Step 4: Verify process behavior**
+- [x] **Step 4: Verify process behavior**
 
 Run: `cargo test`
 
 Expected: graph, identity, target, parser, and legacy tests all pass.
 
-- [ ] **Step 5: Commit the process engine**
+- [x] **Step 5: Commit the process engine**
 
 Run: `git add src/main.rs && git commit -m "feat: safely terminate selected process trees"`
 
@@ -192,7 +192,7 @@ Run: `git add src/main.rs && git commit -m "feat: safely terminate selected proc
 - Modify: `Cargo.toml`
 - Modify: `src/main.rs`
 
-- [ ] **Step 1: Add failing service matching and orchestration tests**
+- [x] **Step 1: Add failing service matching and orchestration tests**
 
 ```rust
 #[test]
@@ -213,7 +213,7 @@ fn dry_run_never_mutates_system() {
 }
 ```
 
-- [ ] **Step 2: Confirm service tests fail**
+- [x] **Step 2: Confirm service tests fail**
 
 Run: `cargo test matches_only_amnezia_services`
 
@@ -221,19 +221,19 @@ Run: `cargo test dry_run_never_mutates_system`
 
 Expected: compilation fails because service matching and the injectable execution boundary are absent.
 
-- [ ] **Step 3: Enable and implement Service Control Manager APIs**
+- [x] **Step 3: Enable and implement Service Control Manager APIs**
 
 Add `"Win32_System_Services"` to the `windows-sys` feature list. Implement RAII `OwnedServiceHandle` using `CloseServiceHandle`; enumerate with `OpenSCManagerW(SC_MANAGER_ENUMERATE_SERVICE)` and `EnumServicesStatusExW`, and include `SC_MANAGER_CONNECT` on the manager used by `OpenServiceW`; match exact `AmneziaVPN-service` or case-insensitive `AmneziaWGTunnel$` prefix.
 
 For non-stopped entries only, open with `SERVICE_STOP | SERVICE_QUERY_STATUS`. Issue stop controls to tunnels before the main service, then poll all opened handles every 100 ms against one five-second deadline. Report already-stopped, confirmed-stopped, timed-out, and failed states. Continue into process cleanup regardless of service errors.
 
-- [ ] **Step 4: Verify the service and dry-run boundaries**
+- [x] **Step 4: Verify the service and dry-run boundaries**
 
 Run: `cargo test`
 
 Expected: all tests pass; the fake backend records zero mutation calls in dry-run.
 
-- [ ] **Step 5: Commit service support**
+- [x] **Step 5: Commit service support**
 
 Run: `git add Cargo.toml Cargo.lock src/main.rs && git commit -m "feat: stop Amnezia services safely"`
 
@@ -242,7 +242,7 @@ Run: `git add Cargo.toml Cargo.lock src/main.rs && git commit -m "feat: stop Amn
 **Files:**
 - Modify: `src/main.rs`
 
-- [ ] **Step 1: Add failing dispatch-state tests**
+- [x] **Step 1: Add failing dispatch-state tests**
 
 ```rust
 #[test]
@@ -263,7 +263,7 @@ fn every_button_maps_to_exactly_one_target() {
 }
 ```
 
-- [ ] **Step 2: Confirm dispatch tests fail**
+- [x] **Step 2: Confirm dispatch tests fail**
 
 Run: `cargo test dispatch_blocks_concurrent_actions_until_completion`
 
@@ -271,19 +271,19 @@ Run: `cargo test every_button_maps_to_exactly_one_target`
 
 Expected: compilation fails until the four IDs and `UiState` exist.
 
-- [ ] **Step 3: Build the 2×2 UI and background dispatcher**
+- [x] **Step 3: Build the 2×2 UI and background dispatcher**
 
 Create four owner-drawn controls, store their handles, and map `WM_COMMAND` IDs through `AppTarget::from_button_id`. On a valid click, atomically enter busy state, disable all buttons, set the selected status, and spawn one worker thread. The worker runs the shared action, publishes `ActionReport` into `OnceLock<Mutex<Option<ActionReport>>>`, and posts `WM_APP + 1` with no payload. Completion takes the report, renders it, exits busy state, and enables every button. `WM_DESTROY` marks the window dead and clears the mailbox; failed posting also clears it.
 
 Draw the buttons through shared owner-draw code using target-specific colors and GDI primitives. Render recognizable monochrome Codex, Amnezia, and Discord marks and a multicolor Chrome ring. Center each logo and exact English label with pressed-state feedback. Delete every created brush/pen after drawing and never delete stock objects.
 
-- [ ] **Step 4: Verify UI state and compile quality**
+- [x] **Step 4: Verify UI state and compile quality**
 
 Run: `cargo fmt --check && cargo test && cargo clippy --all-targets -- -D warnings`
 
 Expected: formatting is clean, all tests pass, and Clippy emits no warnings.
 
-- [ ] **Step 5: Commit the interface**
+- [x] **Step 5: Commit the interface**
 
 Run: `git add src/main.rs && git commit -m "feat: add four-button process killer UI"`
 
@@ -297,7 +297,7 @@ Run: `git add src/main.rs && git commit -m "feat: add four-button process killer
 - Produce: `target/release/kill-codex.exe`
 - Replace: current user's Desktop `Kill-Codex.exe`
 
-- [ ] **Step 1: Update version metadata and user documentation**
+- [x] **Step 1: Update version metadata and user documentation**
 
 Bump the feature release to `1.2.0` in Cargo, Win32 version resources, and the application manifest. Set the manifest to `asInvoker` so dry-run remains non-elevated while the normal GUI performs its existing explicit UAC relaunch. Document all four buttons, exact process families, Amnezia service handling, immediate destructive behavior, unsaved-work warning, and exact safe-inspection forms:
 
@@ -308,27 +308,27 @@ Kill-Codex.exe --dry-run discord
 Kill-Codex.exe --dry-run chrome
 ```
 
-- [ ] **Step 2: Run the complete source-quality gate**
+- [x] **Step 2: Run the complete source-quality gate**
 
 Run: `cargo fmt --check && cargo test && cargo clippy --all-targets -- -D warnings && git diff --check`
 
 Expected: all commands exit 0 with every unit test passing and no warnings or whitespace errors.
 
-- [ ] **Step 3: Build the final release binary**
+- [x] **Step 3: Build the final release binary**
 
 Run: `cargo build --release`
 
 Expected: exit 0 and `target/release/kill-codex.exe` exists as a native Windows GUI executable with embedded application resources.
 
-- [ ] **Step 4: Exercise all non-destructive launch paths**
+- [x] **Step 4: Exercise all non-destructive launch paths**
 
 Launch each dry-run target and confirm the informational window appears without terminating live processes. Launch the main GUI without clicking destructive buttons and inspect the 2×2 layout, labels, logos, enabled states, status, and window repainting.
 
-- [ ] **Step 5: Copy the verified candidate to Desktop**
+- [x] **Step 5: Copy the verified candidate to Desktop**
 
 Resolve Desktop with `[Environment]::GetFolderPath('Desktop')`, copy to a temporary sibling name, verify size and SHA-256 against `target/release/kill-codex.exe`, then atomically replace `Kill-Codex.exe`. Do not run any destructive button during delivery verification.
 
-- [ ] **Step 6: Commit documentation and record final evidence**
+- [x] **Step 6: Commit documentation and record final evidence**
 
 Run: `git add Cargo.toml Cargo.lock app.rc app.manifest README.md docs/superpowers/plans/2026-09-03-multi-app-process-killer.md && git commit -m "docs: release multi-app process killer 1.2.0"`
 

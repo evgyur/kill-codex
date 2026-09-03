@@ -11,8 +11,8 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use windows_sys::Win32::Foundation::{
-    CloseHandle, ERROR_MORE_DATA, ERROR_SERVICE_NOT_ACTIVE, FILETIME, HANDLE, HWND,
-    INVALID_HANDLE_VALUE, LPARAM, LRESULT, POINT, WAIT_OBJECT_0, WAIT_TIMEOUT, WPARAM,
+    CloseHandle, ERROR_MORE_DATA, ERROR_NO_MORE_FILES, ERROR_SERVICE_NOT_ACTIVE, FILETIME, HANDLE,
+    HWND, INVALID_HANDLE_VALUE, LPARAM, LRESULT, POINT, WAIT_OBJECT_0, WAIT_TIMEOUT, WPARAM,
 };
 use windows_sys::Win32::Graphics::Gdi::{
     COLOR_WINDOW, CreateSolidBrush, DEFAULT_GUI_FONT, DT_CENTER, DT_SINGLELINE, DT_VCENTER,
@@ -198,8 +198,13 @@ impl UiState {
         }
     }
 
-    fn complete(&mut self) {
-        self.busy = false;
+    fn complete_if_report(&mut self, report_present: bool) -> bool {
+        if self.busy && report_present {
+            self.busy = false;
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -272,31 +277,30 @@ impl ActionReport {
     }
 }
 
-trait ActionBackend {
-    fn inspect(&self, target: AppTarget) -> ActionReport;
-    fn execute(&self, target: AppTarget) -> ActionReport;
+trait SystemOps {
+    fn enumerate_processes(&self) -> Result<Vec<ProcessInfo>, String>;
+    fn enumerate_services(&self) -> Result<Vec<ServiceInfo>, String>;
+    fn stop_services(&self) -> OperationResult;
+    fn terminate_processes(&self, target: AppTarget) -> OperationResult;
 }
 
-struct WindowsBackend;
+struct WindowsSystemOps;
 
-impl ActionBackend for WindowsBackend {
-    fn inspect(&self, target: AppTarget) -> ActionReport {
-        inspect_target(target)
+impl SystemOps for WindowsSystemOps {
+    fn enumerate_processes(&self) -> Result<Vec<ProcessInfo>, String> {
+        enumerate_processes()
     }
 
-    fn execute(&self, target: AppTarget) -> ActionReport {
-        execute_target(target)
+    fn enumerate_services(&self) -> Result<Vec<ServiceInfo>, String> {
+        enumerate_amnezia_services()
     }
-}
 
-fn run_action<B: ActionBackend>(
-    target: AppTarget,
-    mode: ExecutionMode,
-    backend: &B,
-) -> ActionReport {
-    match mode {
-        ExecutionMode::Execute => backend.execute(target),
-        ExecutionMode::DryRun => backend.inspect(target),
+    fn stop_services(&self) -> OperationResult {
+        stop_amnezia_services()
+    }
+
+    fn terminate_processes(&self, target: AppTarget) -> OperationResult {
+        kill_processes(target)
     }
 }
 
@@ -352,21 +356,26 @@ fn enumerate_processes() -> Result<Vec<ProcessInfo>, String> {
         entry.dwSize = size_of::<PROCESSENTRY32W>() as u32;
         let mut result = Vec::new();
 
-        if Process32FirstW(snapshot.0, &mut entry) != 0 {
-            loop {
-                let length = entry
-                    .szExeFile
-                    .iter()
-                    .position(|&character| character == 0)
-                    .unwrap_or(entry.szExeFile.len());
-                result.push(ProcessInfo {
-                    pid: entry.th32ProcessID,
-                    parent_pid: entry.th32ParentProcessID,
-                    name: String::from_utf16_lossy(&entry.szExeFile[..length]),
-                });
-                if Process32NextW(snapshot.0, &mut entry) == 0 {
-                    break;
+        if Process32FirstW(snapshot.0, &mut entry) == 0 {
+            return Err(std::io::Error::last_os_error().to_string());
+        }
+        loop {
+            let length = entry
+                .szExeFile
+                .iter()
+                .position(|&character| character == 0)
+                .unwrap_or(entry.szExeFile.len());
+            result.push(ProcessInfo {
+                pid: entry.th32ProcessID,
+                parent_pid: entry.th32ParentProcessID,
+                name: String::from_utf16_lossy(&entry.szExeFile[..length]),
+            });
+            if Process32NextW(snapshot.0, &mut entry) == 0 {
+                let error = std::io::Error::last_os_error();
+                if error.raw_os_error() != Some(ERROR_NO_MORE_FILES as i32) {
+                    return Err(error.to_string());
                 }
+                break;
             }
         }
         Ok(result)
@@ -646,56 +655,57 @@ fn enumerate_amnezia_services() -> Result<Vec<ServiceInfo>, String> {
             return Err(std::io::Error::last_os_error().to_string());
         }
         let manager = OwnedServiceHandle(manager);
-        let mut bytes_needed = 0;
-        let mut count = 0;
+        let mut services = Vec::new();
         let mut resume = 0;
-        EnumServicesStatusExW(
-            manager.0,
-            SC_ENUM_PROCESS_INFO,
-            SERVICE_WIN32,
-            SERVICE_STATE_ALL,
-            null_mut(),
-            0,
-            &mut bytes_needed,
-            &mut count,
-            &mut resume,
-            null(),
-        );
-        let first_error = std::io::Error::last_os_error();
-        if bytes_needed == 0 && first_error.raw_os_error() != Some(ERROR_MORE_DATA as i32) {
-            return Err(first_error.to_string());
-        }
+        let mut buffer_size = 64 * 1024_usize;
 
-        let mut buffer = vec![0_u8; bytes_needed as usize];
-        resume = 0;
-        if EnumServicesStatusExW(
-            manager.0,
-            SC_ENUM_PROCESS_INFO,
-            SERVICE_WIN32,
-            SERVICE_STATE_ALL,
-            buffer.as_mut_ptr(),
-            bytes_needed,
-            &mut bytes_needed,
-            &mut count,
-            &mut resume,
-            null(),
-        ) == 0
-        {
-            return Err(std::io::Error::last_os_error().to_string());
-        }
+        loop {
+            let mut buffer = vec![0_u8; buffer_size];
+            let mut bytes_needed = 0;
+            let mut count = 0;
+            let ok = EnumServicesStatusExW(
+                manager.0,
+                SC_ENUM_PROCESS_INFO,
+                SERVICE_WIN32,
+                SERVICE_STATE_ALL,
+                buffer.as_mut_ptr(),
+                buffer.len() as u32,
+                &mut bytes_needed,
+                &mut count,
+                &mut resume,
+                null(),
+            );
+            let error = if ok == 0 {
+                Some(std::io::Error::last_os_error())
+            } else {
+                None
+            };
+            let entries = std::slice::from_raw_parts(
+                buffer.as_ptr() as *const ENUM_SERVICE_STATUS_PROCESSW,
+                count as usize,
+            );
+            services.extend(entries.iter().filter_map(|entry| {
+                let service = ServiceInfo {
+                    name: wide_ptr_to_string(entry.lpServiceName),
+                    state: entry.ServiceStatusProcess.dwCurrentState,
+                };
+                is_amnezia_service(&service.name).then_some(service)
+            }));
 
-        let entries = std::slice::from_raw_parts(
-            buffer.as_ptr() as *const ENUM_SERVICE_STATUS_PROCESSW,
-            count as usize,
-        );
-        Ok(entries
-            .iter()
-            .map(|entry| ServiceInfo {
-                name: wide_ptr_to_string(entry.lpServiceName),
-                state: entry.ServiceStatusProcess.dwCurrentState,
-            })
-            .filter(|service| is_amnezia_service(&service.name))
-            .collect())
+            if ok != 0 {
+                return Ok(services);
+            }
+            let error = error.expect("failed service enumeration must have an OS error");
+            if error.raw_os_error() != Some(ERROR_MORE_DATA as i32) {
+                return Err(error.to_string());
+            }
+            if count == 0 {
+                if bytes_needed as usize <= buffer_size {
+                    return Err("Перечисление служб не продвинулось".to_string());
+                }
+                buffer_size = bytes_needed as usize;
+            }
+        }
     }
 }
 
@@ -873,11 +883,11 @@ fn stop_amnezia_services() -> OperationResult {
     result
 }
 
-fn inspect_target(target: AppTarget) -> ActionReport {
+fn inspect_target<O: SystemOps>(target: AppTarget, ops: &O) -> ActionReport {
     let mut lines = Vec::new();
     let mut failures = 0;
     let services = if target == AppTarget::Amnezia {
-        match enumerate_amnezia_services() {
+        match ops.enumerate_services() {
             Ok(services) => {
                 for service in &services {
                     let state = if service.state == SERVICE_STOPPED {
@@ -899,7 +909,7 @@ fn inspect_target(target: AppTarget) -> ActionReport {
         0
     };
 
-    let processes = match enumerate_processes() {
+    let processes = match ops.enumerate_processes() {
         Ok(processes) => {
             let ids = target_pids(&processes, target, unsafe { GetCurrentProcessId() });
             for process in processes
@@ -927,13 +937,13 @@ fn inspect_target(target: AppTarget) -> ActionReport {
     }
 }
 
-fn execute_target(target: AppTarget) -> ActionReport {
+fn execute_target<O: SystemOps>(target: AppTarget, ops: &O) -> ActionReport {
     let services = if target == AppTarget::Amnezia {
-        stop_amnezia_services()
+        ops.stop_services()
     } else {
         OperationResult::default()
     };
-    let processes = kill_processes(target);
+    let processes = ops.terminate_processes(target);
     let mut lines = services.lines;
     lines.extend(processes.lines);
     ActionReport {
@@ -943,6 +953,13 @@ fn execute_target(target: AppTarget) -> ActionReport {
         services: services.succeeded,
         failed: processes.failed + services.failed,
         dry_run: false,
+    }
+}
+
+fn run_action<O: SystemOps>(target: AppTarget, mode: ExecutionMode, ops: &O) -> ActionReport {
+    match mode {
+        ExecutionMode::Execute => execute_target(target, ops),
+        ExecutionMode::DryRun => inspect_target(target, ops),
     }
 }
 
@@ -1034,7 +1051,7 @@ fn start_action(hwnd: HWND, target: AppTarget) {
     }
     let window = hwnd as isize;
     thread::spawn(move || {
-        let report = run_action(target, ExecutionMode::Execute, &WindowsBackend);
+        let report = run_action(target, ExecutionMode::Execute, &WindowsSystemOps);
         if !WINDOW_ALIVE.load(Ordering::Acquire) {
             lock_unpoisoned(report_mailbox()).take();
             return;
@@ -1417,14 +1434,15 @@ unsafe extern "system" fn window_proc(
             }
         }
         WM_ACTION_COMPLETE => {
-            if let Some(report) = lock_unpoisoned(report_mailbox()).take() {
+            let report = lock_unpoisoned(report_mailbox()).take();
+            let completed = lock_unpoisoned(ui_state()).complete_if_report(report.is_some());
+            if completed && let Some(report) = report {
                 unsafe {
                     set_text(STATUS.load(Ordering::Relaxed) as HWND, &report.status());
                     set_text(DETAILS.load(Ordering::Relaxed) as HWND, &report.details());
                     enable_all_buttons(true);
                 }
             }
-            lock_unpoisoned(ui_state()).complete();
             0
         }
         WM_DRAWITEM => {
@@ -1474,7 +1492,7 @@ fn run_gui() {
         let hwnd = CreateWindowExW(
             0,
             class_name.as_ptr(),
-            wide("Kill Apps").as_ptr(),
+            wide("KILL APPS").as_ptr(),
             WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
@@ -1528,7 +1546,7 @@ fn main() {
         }
     };
     if let RunMode::DryRun(target) = mode {
-        let report = run_action(target, ExecutionMode::DryRun, &WindowsBackend);
+        let report = run_action(target, ExecutionMode::DryRun, &WindowsSystemOps);
         show_report(&report, "Kill Apps — безопасная проверка");
         return;
     }
@@ -1677,53 +1695,59 @@ mod tests {
         assert!(!is_amnezia_service("MyAmneziaHelper"));
     }
 
-    struct FakeBackend {
-        inspections: Cell<usize>,
-        executions: Cell<usize>,
+    struct FakeSystemOps {
+        process_enumerations: Cell<usize>,
+        service_enumerations: Cell<usize>,
+        stop_service_calls: Cell<usize>,
+        terminate_process_calls: Cell<usize>,
     }
 
-    impl ActionBackend for FakeBackend {
-        fn inspect(&self, target: AppTarget) -> ActionReport {
-            self.inspections.set(self.inspections.get() + 1);
-            ActionReport {
-                target,
-                lines: vec!["inspection".into()],
-                processes: 1,
-                services: 1,
-                failed: 0,
-                dry_run: true,
-            }
+    impl SystemOps for FakeSystemOps {
+        fn enumerate_processes(&self) -> Result<Vec<ProcessInfo>, String> {
+            self.process_enumerations
+                .set(self.process_enumerations.get() + 1);
+            Ok(Vec::new())
         }
 
-        fn execute(&self, target: AppTarget) -> ActionReport {
-            self.executions.set(self.executions.get() + 1);
-            ActionReport {
-                target,
-                lines: Vec::new(),
-                processes: 0,
-                services: 0,
-                failed: 0,
-                dry_run: false,
-            }
+        fn enumerate_services(&self) -> Result<Vec<ServiceInfo>, String> {
+            self.service_enumerations
+                .set(self.service_enumerations.get() + 1);
+            Ok(Vec::new())
+        }
+
+        fn stop_services(&self) -> OperationResult {
+            self.stop_service_calls
+                .set(self.stop_service_calls.get() + 1);
+            OperationResult::default()
+        }
+
+        fn terminate_processes(&self, _target: AppTarget) -> OperationResult {
+            self.terminate_process_calls
+                .set(self.terminate_process_calls.get() + 1);
+            OperationResult::default()
         }
     }
 
     #[test]
     fn dry_run_never_mutates_system() {
-        let fake = FakeBackend {
-            inspections: Cell::new(0),
-            executions: Cell::new(0),
+        let fake = FakeSystemOps {
+            process_enumerations: Cell::new(0),
+            service_enumerations: Cell::new(0),
+            stop_service_calls: Cell::new(0),
+            terminate_process_calls: Cell::new(0),
         };
         let report = run_action(AppTarget::Amnezia, ExecutionMode::DryRun, &fake);
-        assert!(!report.lines.is_empty());
-        assert_eq!(fake.inspections.get(), 1);
-        assert_eq!(fake.executions.get(), 0);
+        assert!(report.dry_run);
+        assert_eq!(fake.process_enumerations.get(), 1);
+        assert_eq!(fake.service_enumerations.get(), 1);
+        assert_eq!(fake.stop_service_calls.get(), 0);
+        assert_eq!(fake.terminate_process_calls.get(), 0);
     }
 
     #[test]
     fn live_backend_can_inspect_every_target_without_execution() {
         for target in AppTarget::ALL {
-            let report = run_action(target, ExecutionMode::DryRun, &WindowsBackend);
+            let report = run_action(target, ExecutionMode::DryRun, &WindowsSystemOps);
             assert_eq!(report.target, target);
             assert!(report.dry_run);
         }
@@ -1734,8 +1758,46 @@ mod tests {
         let mut state = UiState::default();
         assert!(state.begin(AppTarget::Chrome));
         assert!(!state.begin(AppTarget::Discord));
-        state.complete();
+        assert!(!state.complete_if_report(false));
+        assert!(!state.begin(AppTarget::Discord));
+        assert!(state.complete_if_report(true));
         assert!(state.begin(AppTarget::Discord));
+    }
+
+    #[test]
+    fn report_formats_empty_success_and_mixed_results() {
+        let empty = ActionReport {
+            target: AppTarget::Chrome,
+            lines: Vec::new(),
+            processes: 0,
+            services: 0,
+            failed: 0,
+            dry_run: false,
+        };
+        assert_eq!(empty.details(), "Процессы и службы Chrome не найдены.");
+        assert!(empty.status().contains("процессов — 0"));
+
+        let success = ActionReport {
+            target: AppTarget::Amnezia,
+            lines: vec!["✓ Служба AmneziaVPN-service".into()],
+            processes: 2,
+            services: 1,
+            failed: 0,
+            dry_run: false,
+        };
+        assert!(success.status().contains("процессов — 2, служб — 1"));
+        assert_eq!(success.details(), "✓ Служба AmneziaVPN-service");
+
+        let mixed = ActionReport {
+            target: AppTarget::Discord,
+            lines: vec!["✓ Discord.exe".into(), "✗ Discord.exe: denied".into()],
+            processes: 1,
+            services: 0,
+            failed: 1,
+            dry_run: false,
+        };
+        assert!(mixed.status().contains("ошибок — 1"));
+        assert!(mixed.details().contains("\r\n"));
     }
 
     #[test]
