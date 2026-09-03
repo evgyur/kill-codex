@@ -62,9 +62,9 @@ Each button dispatches to one shared operation:
 5. Issue `TerminateProcess` to every retained handle, wait for confirmed exits against the shared deadline, then close every handle; continue on per-process failure.
 6. Render a combined status and details report through the synchronized GUI mailbox.
 
-Failure to enumerate services or processes is shown in the details control. Partial success is preserved and reported. Process termination is a two-phase operation: issue `TerminateProcess` to every opened target handle, then wait for signaled handles against one operation-wide three-second deadline. The report distinguishes confirmed exits, accepted termination requests that did not signal before the deadline, and failures. `TerminateProcess` returning success alone is not reported as a confirmed exit.
+Failure to enumerate services or processes is shown in the details control. Partial success is preserved and reported. Process termination is a two-phase operation: issue `TerminateProcess` only to retained, validated target handles, then wait for signaled handles against one operation-wide three-second deadline. The report distinguishes confirmed exits, accepted termination requests that did not signal before the deadline, and failures. `TerminateProcess` returning success alone is not reported as a confirmed exit.
 
-`CloseServiceHandle` releases every SCM and service handle. `CloseHandle` releases snapshots, process handles, and token handles. `DeleteObject` releases every owned GDI brush; stock objects are never deleted. Ownership of the worker result payload transfers exactly once through the completion window message and is released by the window thread.
+`CloseServiceHandle` releases every SCM and service handle. `CloseHandle` releases snapshots, process handles, and token handles. `DeleteObject` releases every owned GDI brush; stock objects are never deleted. The synchronized mailbox owns a completed report until the window thread takes it, the worker clears it after a failed post, or window destruction clears it; the completion message carries no report pointer or other owned payload.
 
 ## Safe Inspection
 
