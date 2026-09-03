@@ -13,6 +13,8 @@
 ## File Map
 
 - Modify `Cargo.toml`: enable Win32 service-management APIs.
+- Modify `app.rc`: update embedded version and product metadata.
+- Modify `app.manifest`: update assembly version and product description.
 - Modify `src/main.rs`: target model, CLI parsing, safe process engine, SCM service engine, asynchronous GUI, 2×2 buttons, vector logos, and unit tests.
 - Modify `README.md`: document four actions, Amnezia service behavior, safe inspection grammar, and release build.
 - Create/update `docs/superpowers/plans/2026-09-03-multi-app-process-killer.md`: implementation record and checked execution steps.
@@ -221,7 +223,7 @@ Expected: compilation fails because service matching and the injectable executio
 
 - [ ] **Step 3: Enable and implement Service Control Manager APIs**
 
-Add `"Win32_System_Services"` to the `windows-sys` feature list. Implement RAII `OwnedServiceHandle` using `CloseServiceHandle`; enumerate with `OpenSCManagerW(SC_MANAGER_ENUMERATE_SERVICE)` and `EnumServicesStatusExW`; match exact `AmneziaVPN-service` or case-insensitive `AmneziaWGTunnel$` prefix.
+Add `"Win32_System_Services"` to the `windows-sys` feature list. Implement RAII `OwnedServiceHandle` using `CloseServiceHandle`; enumerate with `OpenSCManagerW(SC_MANAGER_ENUMERATE_SERVICE)` and `EnumServicesStatusExW`, and include `SC_MANAGER_CONNECT` on the manager used by `OpenServiceW`; match exact `AmneziaVPN-service` or case-insensitive `AmneziaWGTunnel$` prefix.
 
 For non-stopped entries only, open with `SERVICE_STOP | SERVICE_QUERY_STATUS`. Issue stop controls to tunnels before the main service, then poll all opened handles every 100 ms against one five-second deadline. Report already-stopped, confirmed-stopped, timed-out, and failed states. Continue into process cleanup regardless of service errors.
 
@@ -289,12 +291,15 @@ Run: `git add src/main.rs && git commit -m "feat: add four-button process killer
 
 **Files:**
 - Modify: `README.md`
+- Modify: `Cargo.toml`
+- Modify: `app.rc`
+- Modify: `app.manifest`
 - Produce: `target/release/kill-codex.exe`
 - Replace: current user's Desktop `Kill-Codex.exe`
 
-- [ ] **Step 1: Update user documentation**
+- [ ] **Step 1: Update version metadata and user documentation**
 
-Document all four buttons, exact process families, Amnezia service handling, immediate destructive behavior, unsaved-work warning, and exact safe-inspection forms:
+Bump the feature release to `1.2.0` in Cargo, Win32 version resources, and the application manifest. Set the manifest to `asInvoker` so dry-run remains non-elevated while the normal GUI performs its existing explicit UAC relaunch. Document all four buttons, exact process families, Amnezia service handling, immediate destructive behavior, unsaved-work warning, and exact safe-inspection forms:
 
 ```powershell
 Kill-Codex.exe --dry-run
@@ -325,6 +330,6 @@ Resolve Desktop with `[Environment]::GetFolderPath('Desktop')`, copy to a tempor
 
 - [ ] **Step 6: Commit documentation and record final evidence**
 
-Run: `git add README.md docs/superpowers/plans/2026-09-03-multi-app-process-killer.md && git commit -m "docs: document multi-app process killer"`
+Run: `git add Cargo.toml Cargo.lock app.rc app.manifest README.md docs/superpowers/plans/2026-09-03-multi-app-process-killer.md && git commit -m "docs: release multi-app process killer 1.2.0"`
 
 Record final `cargo test`, Clippy, release build, executable SHA-256, desktop SHA-256, and `git status --short` results in the completion report.

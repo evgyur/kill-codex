@@ -6,7 +6,7 @@ Expand the existing native Windows utility from one Codex action to four immedia
 
 ## Scope
 
-The work remains a single small Rust/Win32 executable. It does not add an installer, background agent, telemetry, configuration UI, confirmation dialogs, or automatic process discovery by executable path. Existing elevation behavior remains: the application relaunches through UAC before showing the main window.
+The work remains a single small Rust/Win32 executable. It does not add an installer, background agent, telemetry, configuration UI, confirmation dialogs, or automatic process discovery by executable path. The manifest runs as the current user so dry-run needs no elevation; the normal GUI path relaunches through UAC before showing the main window.
 
 ## User Interface
 
@@ -42,7 +42,7 @@ The first process snapshot is candidate discovery, not sufficient identity proof
 
 ## Amnezia Service Handling
 
-The Amnezia action opens the Windows Service Control Manager with `SC_MANAGER_ENUMERATE_SERVICE`. It enumerates services and selects only:
+The Amnezia action opens the Windows Service Control Manager with `SC_MANAGER_ENUMERATE_SERVICE` for discovery and `SC_MANAGER_CONNECT` when opening selected services. It enumerates services and selects only:
 
 - the exact service name `AmneziaVPN-service`, compared case-insensitively;
 - service names beginning with `AmneziaWGTunnel$`, compared case-insensitively.

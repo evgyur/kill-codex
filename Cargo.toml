@@ -1,8 +1,8 @@
 [package]
 name = "kill-codex"
-version = "1.1.0"
+version = "1.2.0"
 edition = "2024"
-description = "Tiny native Windows utility that terminates Codex and ChatGPT processes."
+description = "Tiny native Windows utility that terminates Codex, Amnezia, Discord, or Chrome."
 license = "MIT"
 repository = "https://github.com/evgyur/kill-codex"
 
@@ -13,6 +13,7 @@ windows-sys = { version = "0.59", features = [
     "Win32_Security",
     "Win32_System_Diagnostics_ToolHelp",
     "Win32_System_LibraryLoader",
+    "Win32_System_Services",
     "Win32_System_Threading",
     "Win32_UI_Controls",
     "Win32_UI_Input_KeyboardAndMouse",

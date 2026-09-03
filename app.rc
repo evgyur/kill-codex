@@ -2,8 +2,8 @@
 1 24 "app.manifest"
 
 1 VERSIONINFO
-FILEVERSION 1,1,0,0
-PRODUCTVERSION 1,1,0,0
+FILEVERSION 1,2,0,0
+PRODUCTVERSION 1,2,0,0
 FILEOS 0x40004
 FILETYPE 0x1
 BEGIN
@@ -12,13 +12,13 @@ BEGIN
     BLOCK "040904B0"
     BEGIN
       VALUE "CompanyName", "Evgeny Yurchenko\0"
-      VALUE "FileDescription", "Kill Codex\0"
-      VALUE "FileVersion", "1.1.0\0"
+      VALUE "FileDescription", "Kill Apps — Codex, Amnezia, Discord, Chrome\0"
+      VALUE "FileVersion", "1.2.0\0"
       VALUE "InternalName", "kill-codex.exe\0"
       VALUE "LegalCopyright", "MIT License\0"
       VALUE "OriginalFilename", "Kill-Codex.exe\0"
-      VALUE "ProductName", "Kill Codex\0"
-      VALUE "ProductVersion", "1.1.0\0"
+      VALUE "ProductName", "Kill Apps\0"
+      VALUE "ProductVersion", "1.2.0\0"
     END
   END
   BLOCK "VarFileInfo"
