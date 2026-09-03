@@ -7,4 +7,5 @@ publish/
 *.user
 *.suo
 .vs/
+.superpowers/
 assets/*-source.png
