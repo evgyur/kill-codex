@@ -19,7 +19,7 @@ The work remains a single small Rust/Win32 executable. It does not add an instal
   - `KILL CHROME`
 - Each button uses an application-specific color and a recognizable vector logo drawn through GDI. Logos are compiled into behavior/code and require no external image files at runtime.
 - A click executes immediately without a confirmation dialog.
-- While an action runs, the clicked button is disabled to prevent re-entry. It is re-enabled after the operation completes.
+- Work runs on one background worker so service polling and process waits never block painting or window input. While an action runs, all four buttons are disabled; a second destructive action cannot start concurrently. The worker posts one owned result payload back to the window thread, which updates the controls, releases the payload, and re-enables all buttons.
 - The existing status and read-only details controls remain below the grid. They report the selected application, the number of stopped services and processes, individual successes, and individual failures.
 - If nothing is running, the details control says that no processes or services for the selected application were found.
 
@@ -36,16 +36,18 @@ Process matching is case-insensitive and intentionally narrow:
 | Discord | `Discord.exe` and `Discord` |
 | Chrome | `chrome.exe` and `chrome` |
 
-After direct matches are found, the application expands the set through the process-parent graph so descendants with generic names are included. It excludes the process killer's own PID. Targets do not overlap: clicking one button never runs another target's predicate.
+After direct matches are found, the application expands the set through the process-parent graph so descendants with generic names are included. It excludes the process killer's own PID. Direct predicates do not overlap. A process whose name directly matches another target is still included when it is a verified descendant of the selected target; descendant ownership takes precedence over its executable name.
+
+The process snapshot is candidate discovery, not sufficient identity proof. Before terminating anything, the worker opens every candidate with `PROCESS_TERMINATE | SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION` and keeps all successful handles open until the operation ends. `GetProcessTimes` supplies creation times; a parent-child edge is accepted only when both identities can be opened and the child was created no earlier than the parent. Opening handles before the first termination pins each process object and prevents later PID reuse from redirecting `TerminateProcess` to a different process. Candidates that cannot be opened or validated are skipped and reported as failures.
 
 ## Amnezia Service Handling
 
-The Amnezia action opens the Windows Service Control Manager with enumerate and stop access. It enumerates services and selects only:
+The Amnezia action opens the Windows Service Control Manager with `SC_MANAGER_ENUMERATE_SERVICE`. It enumerates services and selects only:
 
-- the exact service name `AmneziaVPN-service`;
-- service names beginning with `AmneziaWGTunnel$`.
+- the exact service name `AmneziaVPN-service`, compared case-insensitively;
+- service names beginning with `AmneziaWGTunnel$`, compared case-insensitively.
 
-Tunnel services are stopped before the main service. A service already stopped is reported as unchanged, not as an error. A stop request is considered successful when the service is already stopped or reaches the stopped state within a bounded wait. Timeout and access errors are reported, but they do not prevent process termination from continuing.
+Each selected service is opened separately with `SERVICE_STOP | SERVICE_QUERY_STATUS`; service access does not come from the SCM handle. Tunnel services are stopped before the main service. A service already stopped is reported as unchanged, not as an error. `STOP_PENDING` is polled without sending a duplicate control request. Other non-stopped states receive one `SERVICE_CONTROL_STOP` request and are then polled. Polling occurs every 100 ms against one operation-wide five-second deadline, so the GUI does not accumulate a separate five-second wait per service. A service is successful only when `SERVICE_STOPPED` is observed; deadline, access, query, and control errors are reported, but they do not prevent process termination from continuing.
 
 Stopping services does not change their startup type and does not delete them. After service handling, the Amnezia process predicate and descendant expansion run normally to terminate any remaining application processes.
 
@@ -59,19 +61,22 @@ Each button dispatches to one shared operation:
 4. Open each process with `PROCESS_TERMINATE`, terminate it, close the handle, and continue on per-process failure.
 5. Render a combined status and details report.
 
-Failure to enumerate services or processes is shown in the details control. Partial success is preserved and reported. Handles returned by Win32 APIs are closed on every path.
+Failure to enumerate services or processes is shown in the details control. Partial success is preserved and reported. Process termination is a two-phase operation: issue `TerminateProcess` to every opened target handle, then wait for signaled handles against one operation-wide three-second deadline. The report distinguishes confirmed exits, accepted termination requests that did not signal before the deadline, and failures. `TerminateProcess` returning success alone is not reported as a confirmed exit.
+
+`CloseServiceHandle` releases every SCM and service handle. `CloseHandle` releases snapshots, process handles, and token handles. `DeleteObject` releases every owned GDI brush; stock objects are never deleted. Ownership of the worker result payload transfers exactly once through the completion window message and is released by the window thread.
 
 ## Safe Inspection
 
-Preserve `--dry-run`. With no target argument it inspects Codex for backward compatibility. An optional target name (`codex`, `amnezia`, `discord`, or `chrome`) selects another target. Dry-run reports matching services and processes but never sends a service control request and never calls `TerminateProcess`.
+Preserve `--dry-run`. The exact grammar is `Kill-Codex.exe --dry-run [codex|amnezia|discord|chrome]`. Omitting the target inspects Codex for backward compatibility. Target names are case-insensitive. Any unknown target, duplicate target, extra argument, or conflicting argument displays usage and exits with code 2; it never silently falls back to Codex. Dry-run reports matching services and processes but never opens a service with stop access, sends a service control request, opens a process with terminate access, or calls `TerminateProcess`.
 
 ## Code Boundaries
 
 The current codebase is intentionally compact. Keep the implementation in `src/main.rs`, but separate concerns with small types/functions:
 
 - target metadata and name predicates;
-- process enumeration, descendant expansion, and termination;
+- process enumeration, creation-time validation, pinned-handle ownership, descendant expansion, termination, and bounded exit confirmation;
 - service enumeration, matching, stop requests, and bounded status polling;
+- one background-operation dispatcher and its completion-message ownership contract;
 - Win32 control construction and owner drawing;
 - report formatting and dry-run output.
 
@@ -86,6 +91,10 @@ Unit tests cover:
 - descendant expansion and self-PID exclusion;
 - exact and prefix-based Amnezia service matching;
 - button identifier mapping;
+- command-line parsing, including rejected unknown and extra arguments;
+- an injected/fake system-operations implementation proving that dry-run performs enumeration only and never reaches stop or terminate operations;
+- descendant edge rejection when creation times are invalid and stable handle identity for accepted candidates;
+- asynchronous dispatch's global busy-state and completion-message mapping as pure state transitions;
 - report output for empty, successful, failed, and mixed results where pure formatting functions make this practical.
 
 Repository verification consists of:
@@ -95,6 +104,7 @@ Repository verification consists of:
 3. `cargo clippy --all-targets -- -D warnings`
 4. `cargo build --release`
 5. Launch the release executable in `--dry-run` mode for each target and confirm that the result window appears without terminating anything.
+6. Launch the release executable normally without pressing a kill button and manually inspect the 2×2 layout, exact labels, logos, initial status, and enabled states. Exercise the dispatch/state transition through a non-destructive test backend in unit tests rather than against live applications.
 
 The destructive buttons are not exercised automatically against the user's live Codex, Amnezia, Discord, or Chrome sessions.
 
