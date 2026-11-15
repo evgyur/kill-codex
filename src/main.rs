@@ -12,12 +12,12 @@ use std::time::{Duration, Instant};
 
 use windows_sys::Win32::Foundation::{
     CloseHandle, ERROR_MORE_DATA, ERROR_NO_MORE_FILES, ERROR_SERVICE_NOT_ACTIVE, FILETIME, HANDLE,
-    HWND, INVALID_HANDLE_VALUE, LPARAM, LRESULT, POINT, WAIT_OBJECT_0, WAIT_TIMEOUT, WPARAM,
+    HWND, INVALID_HANDLE_VALUE, LPARAM, LRESULT, WAIT_OBJECT_0, WAIT_TIMEOUT, WPARAM,
 };
 use windows_sys::Win32::Graphics::Gdi::{
     COLOR_WINDOW, CreateSolidBrush, DEFAULT_GUI_FONT, DT_CENTER, DT_SINGLELINE, DT_VCENTER,
-    DeleteObject, DrawTextW, Ellipse, FillRect, GetStockObject, NULL_PEN, Pie, Polygon, RoundRect,
-    SelectObject, SetBkMode, SetTextColor, TRANSPARENT, UpdateWindow,
+    DeleteObject, DrawTextW, FillRect, GetStockObject, SetBkMode, SetTextColor, TRANSPARENT,
+    UpdateWindow,
 };
 use windows_sys::Win32::Security::{
     GetTokenInformation, TOKEN_ELEVATION, TOKEN_QUERY, TokenElevation,
@@ -1098,81 +1098,6 @@ fn rgb(red: u8, green: u8, blue: u8) -> u32 {
     red as u32 | ((green as u32) << 8) | ((blue as u32) << 16)
 }
 
-unsafe fn filled_ellipse(
-    hdc: windows_sys::Win32::Graphics::Gdi::HDC,
-    color: u32,
-    left: i32,
-    top: i32,
-    right: i32,
-    bottom: i32,
-) {
-    unsafe {
-        let brush = CreateSolidBrush(color);
-        let old_brush = SelectObject(hdc, brush);
-        let old_pen = SelectObject(hdc, GetStockObject(NULL_PEN));
-        Ellipse(hdc, left, top, right, bottom);
-        SelectObject(hdc, old_pen);
-        SelectObject(hdc, old_brush);
-        DeleteObject(brush);
-    }
-}
-
-unsafe fn filled_polygon(
-    hdc: windows_sys::Win32::Graphics::Gdi::HDC,
-    color: u32,
-    points: &[POINT],
-) {
-    unsafe {
-        let brush = CreateSolidBrush(color);
-        let old_brush = SelectObject(hdc, brush);
-        let old_pen = SelectObject(hdc, GetStockObject(NULL_PEN));
-        Polygon(hdc, points.as_ptr(), points.len() as i32);
-        SelectObject(hdc, old_pen);
-        SelectObject(hdc, old_brush);
-        DeleteObject(brush);
-    }
-}
-
-unsafe fn filled_round_rect(
-    hdc: windows_sys::Win32::Graphics::Gdi::HDC,
-    color: u32,
-    left: i32,
-    top: i32,
-    right: i32,
-    bottom: i32,
-    radius: i32,
-) {
-    unsafe {
-        let brush = CreateSolidBrush(color);
-        let old_brush = SelectObject(hdc, brush);
-        let old_pen = SelectObject(hdc, GetStockObject(NULL_PEN));
-        RoundRect(hdc, left, top, right, bottom, radius, radius);
-        SelectObject(hdc, old_pen);
-        SelectObject(hdc, old_brush);
-        DeleteObject(brush);
-    }
-}
-
-unsafe fn filled_pie(
-    hdc: windows_sys::Win32::Graphics::Gdi::HDC,
-    color: u32,
-    box_rect: (i32, i32, i32, i32),
-    start: (i32, i32),
-    end: (i32, i32),
-) {
-    unsafe {
-        let brush = CreateSolidBrush(color);
-        let old_brush = SelectObject(hdc, brush);
-        let old_pen = SelectObject(hdc, GetStockObject(NULL_PEN));
-        Pie(
-            hdc, box_rect.0, box_rect.1, box_rect.2, box_rect.3, start.0, start.1, end.0, end.1,
-        );
-        SelectObject(hdc, old_pen);
-        SelectObject(hdc, old_brush);
-        DeleteObject(brush);
-    }
-}
-
 unsafe fn draw_resource_icon(
     hdc: windows_sys::Win32::Graphics::Gdi::HDC,
     resource_id: usize,
@@ -1201,159 +1126,16 @@ unsafe fn draw_logo(
     left: i32,
     top: i32,
 ) {
-    let white = rgb(255, 255, 255);
     unsafe {
-        match target {
-            AppTarget::Codex => {
-                for (dx, dy) in [(8, 0), (18, 5), (18, 17), (8, 22), (-2, 17), (-2, 5)] {
-                    filled_ellipse(
-                        hdc,
-                        white,
-                        left + dx,
-                        top + dy,
-                        left + dx + 12,
-                        top + dy + 12,
-                    );
-                }
-                filled_ellipse(
-                    hdc,
-                    rgb(32, 33, 35),
-                    left + 9,
-                    top + 10,
-                    left + 21,
-                    top + 22,
-                );
-            }
-            AppTarget::Amnezia => {
-                filled_polygon(
-                    hdc,
-                    white,
-                    &[
-                        POINT {
-                            x: left + 15,
-                            y: top,
-                        },
-                        POINT {
-                            x: left + 31,
-                            y: top + 30,
-                        },
-                        POINT {
-                            x: left + 22,
-                            y: top + 30,
-                        },
-                        POINT {
-                            x: left + 18,
-                            y: top + 21,
-                        },
-                        POINT {
-                            x: left + 10,
-                            y: top + 21,
-                        },
-                        POINT {
-                            x: left + 6,
-                            y: top + 30,
-                        },
-                        POINT {
-                            x: left - 1,
-                            y: top + 30,
-                        },
-                    ],
-                );
-                filled_polygon(
-                    hdc,
-                    rgb(102, 66, 224),
-                    &[
-                        POINT {
-                            x: left + 14,
-                            y: top + 10,
-                        },
-                        POINT {
-                            x: left + 18,
-                            y: top + 18,
-                        },
-                        POINT {
-                            x: left + 11,
-                            y: top + 18,
-                        },
-                    ],
-                );
-            }
-            AppTarget::Discord => {
-                filled_round_rect(hdc, white, left, top + 4, left + 32, top + 27, 12);
-                filled_ellipse(
-                    hdc,
-                    rgb(88, 101, 242),
-                    left + 8,
-                    top + 12,
-                    left + 13,
-                    top + 17,
-                );
-                filled_ellipse(
-                    hdc,
-                    rgb(88, 101, 242),
-                    left + 20,
-                    top + 12,
-                    left + 25,
-                    top + 17,
-                );
-                filled_round_rect(
-                    hdc,
-                    rgb(88, 101, 242),
-                    left + 11,
-                    top + 20,
-                    left + 22,
-                    top + 23,
-                    2,
-                );
-            }
-            AppTarget::Chrome => {
-                let rect = (left, top, left + 32, top + 32);
-                let center = (left + 16, top + 16);
-                filled_pie(
-                    hdc,
-                    rgb(234, 67, 53),
-                    rect,
-                    (left + 16, top),
-                    (left + 32, top + 23),
-                );
-                filled_pie(
-                    hdc,
-                    rgb(52, 168, 83),
-                    rect,
-                    (left + 32, top + 23),
-                    (left, top + 23),
-                );
-                filled_pie(
-                    hdc,
-                    rgb(251, 188, 4),
-                    rect,
-                    (left, top + 23),
-                    (left + 16, top),
-                );
-                filled_ellipse(
-                    hdc,
-                    white,
-                    center.0 - 8,
-                    center.1 - 8,
-                    center.0 + 8,
-                    center.1 + 8,
-                );
-                filled_ellipse(
-                    hdc,
-                    rgb(66, 133, 244),
-                    center.0 - 6,
-                    center.1 - 6,
-                    center.0 + 6,
-                    center.1 + 6,
-                );
-            }
-            AppTarget::DeepSeek => {
-                draw_resource_icon(hdc, 2, left, top);
-            }
-            AppTarget::Hermes => {
-                draw_resource_icon(hdc, 3, left, top);
-            }
-        }
+        let resource_id = match target {
+            AppTarget::Codex => 4,
+            AppTarget::Amnezia => 5,
+            AppTarget::Discord => 6,
+            AppTarget::Chrome => 7,
+            AppTarget::DeepSeek => 2,
+            AppTarget::Hermes => 3,
+        };
+        draw_resource_icon(hdc, resource_id, left, top);
     }
 }
 

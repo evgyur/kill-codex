@@ -10,6 +10,10 @@ fn main() {
     println!("cargo:rerun-if-changed=assets/kill-codex.ico");
     println!("cargo:rerun-if-changed=assets/deepseek.ico");
     println!("cargo:rerun-if-changed=assets/hermes.ico");
+    println!("cargo:rerun-if-changed=assets/codex.ico");
+    println!("cargo:rerun-if-changed=assets/amnezia.ico");
+    println!("cargo:rerun-if-changed=assets/discord.ico");
+    println!("cargo:rerun-if-changed=assets/chrome.ico");
 
     if env::var("PROFILE").as_deref() != Ok("release") {
         return;

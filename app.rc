@@ -1,11 +1,15 @@
 1 ICON "assets\\kill-codex.ico"
 2 ICON "assets\\deepseek.ico"
 3 ICON "assets\\hermes.ico"
+4 ICON "assets\\codex.ico"
+5 ICON "assets\\amnezia.ico"
+6 ICON "assets\\discord.ico"
+7 ICON "assets\\chrome.ico"
 1 24 "app.manifest"
 
 1 VERSIONINFO
-FILEVERSION 1,3,0,0
-PRODUCTVERSION 1,3,0,0
+FILEVERSION 1,3,1,0
+PRODUCTVERSION 1,3,1,0
 FILEOS 0x40004
 FILETYPE 0x1
 BEGIN
@@ -15,12 +19,12 @@ BEGIN
     BEGIN
       VALUE "CompanyName", "Evgeny Yurchenko\0"
       VALUE "FileDescription", "Kill Apps - Codex, DSH, Hermes, Amnezia, Discord, Chrome\0"
-      VALUE "FileVersion", "1.3.0\0"
+      VALUE "FileVersion", "1.3.1\0"
       VALUE "InternalName", "kill-codex.exe\0"
       VALUE "LegalCopyright", "MIT License\0"
       VALUE "OriginalFilename", "Kill-Codex.exe\0"
       VALUE "ProductName", "Kill Apps\0"
-      VALUE "ProductVersion", "1.3.0\0"
+      VALUE "ProductVersion", "1.3.1\0"
     END
   END
   BLOCK "VarFileInfo"
