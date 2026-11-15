@@ -138,6 +138,8 @@ impl AppTarget {
                     || name == "chatgpt"
                     || name == "codex.exe"
                     || name == "codex"
+                    || name == "deepseekdesktop.exe"
+                    || name == "deepseekdesktop"
                     || name.starts_with("codex-")
             }
             Self::Amnezia => matches!(
@@ -1354,7 +1356,7 @@ unsafe extern "system" fn window_proc(
                 let subtitle = CreateWindowExW(
                     0,
                     wide("STATIC").as_ptr(),
-                    wide("Codex · Amnezia · Discord · Chrome").as_ptr(),
+                    wide("Codex + DeepSeek Harness · Amnezia · Discord · Chrome").as_ptr(),
                     WS_CHILD | WS_VISIBLE,
                     30,
                     56,
@@ -1575,6 +1577,7 @@ mod tests {
     fn matches_each_target_without_cross_matching() {
         assert!(AppTarget::Codex.matches_process("ChatGPT.exe"));
         assert!(AppTarget::Codex.matches_process("codex-code-mode-host.exe"));
+        assert!(AppTarget::Codex.matches_process("DeepSeekDesktop.exe"));
         assert!(AppTarget::Amnezia.matches_process("AmneziaVPN-service.exe"));
         assert!(AppTarget::Amnezia.matches_process("AmneziaWG.exe"));
         assert!(AppTarget::Discord.matches_process("Discord.exe"));
@@ -1582,6 +1585,7 @@ mod tests {
         assert!(!AppTarget::Chrome.matches_process("chromedriver.exe"));
         assert!(!AppTarget::Discord.matches_process("Update.exe"));
         assert!(!AppTarget::Codex.matches_process("Kill-Codex.exe"));
+        assert!(!AppTarget::Codex.matches_process("DeepSeek.exe"));
     }
 
     #[test]
@@ -1630,6 +1634,31 @@ mod tests {
         assert_eq!(
             target_pids(&processes, AppTarget::Codex, 99),
             HashSet::from([10, 11, 12])
+        );
+    }
+
+    #[test]
+    fn codex_target_includes_deepseek_harness_webview_only() {
+        let processes = vec![
+            ProcessInfo {
+                pid: 30,
+                parent_pid: 1,
+                name: "DeepSeekDesktop.exe".into(),
+            },
+            ProcessInfo {
+                pid: 31,
+                parent_pid: 30,
+                name: "msedgewebview2.exe".into(),
+            },
+            ProcessInfo {
+                pid: 40,
+                parent_pid: 1,
+                name: "msedgewebview2.exe".into(),
+            },
+        ];
+        assert_eq!(
+            target_pids(&processes, AppTarget::Codex, 99),
+            HashSet::from([30, 31])
         );
     }
 

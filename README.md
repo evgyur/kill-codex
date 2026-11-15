@@ -5,7 +5,7 @@
 <h1 align="center">KILL APPS</h1>
 
 <p align="center">
-  Codex, Amnezia, Discord или Chrome — завершить всё дерево процессов одним кликом.
+  Codex вместе с DeepSeek Harness, Amnezia, Discord или Chrome — завершить всё дерево процессов одним кликом.
 </p>
 
 <p align="center">
@@ -33,7 +33,7 @@
 
 | Кнопка | Прямые цели | Дополнительно |
 |---|---|---|
-| `KILL CODEX` | `ChatGPT.exe`, `codex.exe`, `codex-*` | Все дочерние процессы |
+| `KILL CODEX` | `ChatGPT.exe`, `codex.exe`, `codex-*`, `DeepSeekDesktop.exe` | Все дочерние процессы, включая WebView DeepSeek Harness |
 | `KILL AMNEZIA` | `AmneziaVPN.exe`, `AmneziaVPN-service.exe`, `AmneziaWG.exe` | Туннельные службы `AmneziaWGTunnel$*`, основная служба `AmneziaVPN-service`, дочерние процессы |
 | `KILL DISCORD` | `Discord.exe` | Все дочерние процессы |
 | `KILL CHROME` | `chrome.exe` | Все дочерние процессы |
@@ -48,7 +48,7 @@
 4. Посмотрите результат в нижней части окна.
 
 > [!WARNING]
-> Несохранённые данные выбранного приложения могут быть потеряны. `KILL CODEX` намеренно завершает `ChatGPT.exe`; `KILL CHROME` закрывает все окна и профили Chrome; `KILL AMNEZIA` отключает активный VPN-туннель.
+> Несохранённые данные выбранного приложения могут быть потеряны. `KILL CODEX` намеренно завершает `ChatGPT.exe` и `DeepSeekDesktop.exe`; `KILL CHROME` закрывает все окна и профили Chrome; `KILL AMNEZIA` отключает активный VPN-туннель.
 
 ## Почему нужны права администратора
 
