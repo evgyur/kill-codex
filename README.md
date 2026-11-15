@@ -5,7 +5,7 @@
 <h1 align="center">KILL APPS</h1>
 
 <p align="center">
-  Codex вместе с DeepSeek Harness, Amnezia, Discord или Chrome — завершить всё дерево процессов одним кликом.
+  Codex, DeepSeek Harness, Hermes Desktop, Amnezia, Discord или Chrome — завершить всё дерево процессов одним кликом.
 </p>
 
 <p align="center">
@@ -20,12 +20,14 @@
 
 Некоторые приложения оставляют после закрытия целое дерево фоновых процессов. Kill Apps завершает выбранную группу сразу — без диспетчера задач, PowerShell и вылавливания каждого PID вручную.
 
-В окне четыре отдельные кнопки с логотипами:
+В окне шесть отдельных кнопок с логотипами:
 
 - **KILL CODEX**
 - **KILL AMNEZIA**
 - **KILL DISCORD**
 - **KILL CHROME**
+- **KILL DSH**
+- **KILL HERMES**
 
 Нажатие выполняется сразу, без дополнительного подтверждения. После операции приложение показывает завершённые процессы, остановленные службы и отдельные ошибки.
 
@@ -33,10 +35,12 @@
 
 | Кнопка | Прямые цели | Дополнительно |
 |---|---|---|
-| `KILL CODEX` | `ChatGPT.exe`, `codex.exe`, `codex-*`, `DeepSeekDesktop.exe` | Все дочерние процессы, включая WebView DeepSeek Harness |
+| `KILL CODEX` | `ChatGPT.exe`, `codex.exe`, `codex-*` | Все дочерние процессы |
 | `KILL AMNEZIA` | `AmneziaVPN.exe`, `AmneziaVPN-service.exe`, `AmneziaWG.exe` | Туннельные службы `AmneziaWGTunnel$*`, основная служба `AmneziaVPN-service`, дочерние процессы |
 | `KILL DISCORD` | `Discord.exe` | Все дочерние процессы |
 | `KILL CHROME` | `chrome.exe` | Все дочерние процессы |
+| `KILL DSH` | `DeepSeekDesktop.exe` | Только его дочерние WebView и другие потомки |
+| `KILL HERMES` | `hermes-canary.exe` | Все экземпляры Hermes Desktop и их дочерние процессы; отдельный Hermes Agent не затрагивается |
 
 Имена сравниваются без учёта регистра. Приложение не использует опасный поиск по произвольной подстроке: цели каждой кнопки изолированы точным списком и контролируемыми префиксами.
 
@@ -48,7 +52,7 @@
 4. Посмотрите результат в нижней части окна.
 
 > [!WARNING]
-> Несохранённые данные выбранного приложения могут быть потеряны. `KILL CODEX` намеренно завершает `ChatGPT.exe` и `DeepSeekDesktop.exe`; `KILL CHROME` закрывает все окна и профили Chrome; `KILL AMNEZIA` отключает активный VPN-туннель.
+> Несохранённые данные выбранного приложения могут быть потеряны. `KILL CODEX` намеренно завершает `ChatGPT.exe`; `KILL DSH` — `DeepSeekDesktop.exe`; `KILL HERMES` — все экземпляры Hermes Desktop; `KILL CHROME` закрывает все окна и профили Chrome; `KILL AMNEZIA` отключает активный VPN-туннель.
 
 ## Почему нужны права администратора
 
@@ -64,6 +68,8 @@ Kill-Codex.exe --dry-run codex
 Kill-Codex.exe --dry-run amnezia
 Kill-Codex.exe --dry-run discord
 Kill-Codex.exe --dry-run chrome
+Kill-Codex.exe --dry-run dsh
+Kill-Codex.exe --dry-run hermes
 ```
 
 Без указания цели проверяется Codex — это сохраняет совместимость с предыдущей версией. Неизвестные или лишние аргументы отклоняются с подсказкой по синтаксису.
@@ -84,7 +90,7 @@ cargo build --release
 ## Что внутри
 
 - Rust и прямые вызовы Win32 API;
-- нативный интерфейс с четырьмя owner-drawn кнопками и встроенными векторными логотипами;
+- нативный интерфейс с шестью owner-drawn кнопками, векторными и оригинальными встроенными логотипами;
 - двухснимочная проверка дерева процессов и закрепление process handles перед завершением;
 - ограниченное по времени подтверждение остановки процессов и служб;
 - фоновый worker, поэтому окно продолжает перерисовываться во время операции;

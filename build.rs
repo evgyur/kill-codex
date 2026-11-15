@@ -8,6 +8,8 @@ fn main() {
     println!("cargo:rerun-if-changed=app.rc");
     println!("cargo:rerun-if-changed=app.manifest");
     println!("cargo:rerun-if-changed=assets/kill-codex.ico");
+    println!("cargo:rerun-if-changed=assets/deepseek.ico");
+    println!("cargo:rerun-if-changed=assets/hermes.ico");
 
     if env::var("PROFILE").as_deref() != Ok("release") {
         return;

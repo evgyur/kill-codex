@@ -47,13 +47,15 @@ const ID_KILL_CODEX: usize = 1001;
 const ID_KILL_AMNEZIA: usize = 1002;
 const ID_KILL_DISCORD: usize = 1003;
 const ID_KILL_CHROME: usize = 1004;
+const ID_KILL_DEEPSEEK: usize = 1005;
+const ID_KILL_HERMES: usize = 1006;
 const WM_ACTION_COMPLETE: u32 = WM_APP + 1;
 const PROCESS_WAIT: Duration = Duration::from_secs(3);
 const SERVICE_WAIT: Duration = Duration::from_secs(5);
 
 static STATUS: AtomicIsize = AtomicIsize::new(0);
 static DETAILS: AtomicIsize = AtomicIsize::new(0);
-static BUTTONS: [AtomicIsize; 4] = [const { AtomicIsize::new(0) }; 4];
+static BUTTONS: [AtomicIsize; 6] = [const { AtomicIsize::new(0) }; 6];
 static WINDOW_ALIVE: AtomicBool = AtomicBool::new(false);
 static REPORT_MAILBOX: OnceLock<Mutex<Option<ActionReport>>> = OnceLock::new();
 static UI_STATE: OnceLock<Mutex<UiState>> = OnceLock::new();
@@ -64,10 +66,19 @@ enum AppTarget {
     Amnezia,
     Discord,
     Chrome,
+    DeepSeek,
+    Hermes,
 }
 
 impl AppTarget {
-    const ALL: [Self; 4] = [Self::Codex, Self::Amnezia, Self::Discord, Self::Chrome];
+    const ALL: [Self; 6] = [
+        Self::Codex,
+        Self::Amnezia,
+        Self::Discord,
+        Self::Chrome,
+        Self::DeepSeek,
+        Self::Hermes,
+    ];
 
     fn index(self) -> usize {
         match self {
@@ -75,6 +86,8 @@ impl AppTarget {
             Self::Amnezia => 1,
             Self::Discord => 2,
             Self::Chrome => 3,
+            Self::DeepSeek => 4,
+            Self::Hermes => 5,
         }
     }
 
@@ -84,6 +97,8 @@ impl AppTarget {
             Self::Amnezia => ID_KILL_AMNEZIA,
             Self::Discord => ID_KILL_DISCORD,
             Self::Chrome => ID_KILL_CHROME,
+            Self::DeepSeek => ID_KILL_DEEPSEEK,
+            Self::Hermes => ID_KILL_HERMES,
         }
     }
 
@@ -93,6 +108,8 @@ impl AppTarget {
             ID_KILL_AMNEZIA => Some(Self::Amnezia),
             ID_KILL_DISCORD => Some(Self::Discord),
             ID_KILL_CHROME => Some(Self::Chrome),
+            ID_KILL_DEEPSEEK => Some(Self::DeepSeek),
+            ID_KILL_HERMES => Some(Self::Hermes),
             _ => None,
         }
     }
@@ -109,6 +126,8 @@ impl AppTarget {
             Self::Amnezia => "amnezia",
             Self::Discord => "discord",
             Self::Chrome => "chrome",
+            Self::DeepSeek => "dsh",
+            Self::Hermes => "hermes",
         }
     }
 
@@ -118,6 +137,8 @@ impl AppTarget {
             Self::Amnezia => "Amnezia",
             Self::Discord => "Discord",
             Self::Chrome => "Chrome",
+            Self::DeepSeek => "DeepSeek Harness",
+            Self::Hermes => "Hermes Desktop",
         }
     }
 
@@ -127,6 +148,8 @@ impl AppTarget {
             Self::Amnezia => "KILL AMNEZIA",
             Self::Discord => "KILL DISCORD",
             Self::Chrome => "KILL CHROME",
+            Self::DeepSeek => "KILL DSH",
+            Self::Hermes => "KILL HERMES",
         }
     }
 
@@ -138,8 +161,6 @@ impl AppTarget {
                     || name == "chatgpt"
                     || name == "codex.exe"
                     || name == "codex"
-                    || name == "deepseekdesktop.exe"
-                    || name == "deepseekdesktop"
                     || name.starts_with("codex-")
             }
             Self::Amnezia => matches!(
@@ -153,6 +174,8 @@ impl AppTarget {
             ),
             Self::Discord => name == "discord.exe" || name == "discord",
             Self::Chrome => name == "chrome.exe" || name == "chrome",
+            Self::DeepSeek => name == "deepseekdesktop.exe" || name == "deepseekdesktop",
+            Self::Hermes => name == "hermes-canary.exe" || name == "hermes-canary",
         }
     }
 
@@ -169,6 +192,10 @@ impl AppTarget {
             (Self::Discord, true) => rgb(64, 78, 204),
             (Self::Chrome, false) => rgb(31, 111, 216),
             (Self::Chrome, true) => rgb(20, 82, 164),
+            (Self::DeepSeek, false) => rgb(0, 79, 181),
+            (Self::DeepSeek, true) => rgb(0, 50, 125),
+            (Self::Hermes, false) => rgb(17, 24, 39),
+            (Self::Hermes, true) => rgb(0, 0, 0),
         }
     }
 }
@@ -324,7 +351,7 @@ unsafe fn wide_ptr_to_string(pointer: *const u16) -> String {
 }
 
 fn usage_error() -> String {
-    "Использование: Kill-Codex.exe --dry-run [codex|amnezia|discord|chrome]".to_string()
+    "Использование: Kill-Codex.exe --dry-run [codex|amnezia|discord|chrome|dsh|hermes]".to_string()
 }
 
 fn parse_args<I, S>(args: I) -> Result<RunMode, String>
@@ -1146,6 +1173,28 @@ unsafe fn filled_pie(
     }
 }
 
+unsafe fn draw_resource_icon(
+    hdc: windows_sys::Win32::Graphics::Gdi::HDC,
+    resource_id: usize,
+    left: i32,
+    top: i32,
+) {
+    unsafe {
+        let instance = GetModuleHandleW(null());
+        let icon = LoadImageW(
+            instance,
+            resource_id as *const u16,
+            IMAGE_ICON,
+            32,
+            32,
+            LR_SHARED,
+        );
+        if !icon.is_null() {
+            DrawIconEx(hdc, left, top, icon, 32, 32, 0, null_mut(), DI_NORMAL);
+        }
+    }
+}
+
 unsafe fn draw_logo(
     hdc: windows_sys::Win32::Graphics::Gdi::HDC,
     target: AppTarget,
@@ -1298,6 +1347,12 @@ unsafe fn draw_logo(
                     center.1 + 6,
                 );
             }
+            AppTarget::DeepSeek => {
+                draw_resource_icon(hdc, 2, left, top);
+            }
+            AppTarget::Hermes => {
+                draw_resource_icon(hdc, 3, left, top);
+            }
         }
     }
 }
@@ -1356,7 +1411,7 @@ unsafe extern "system" fn window_proc(
                 let subtitle = CreateWindowExW(
                     0,
                     wide("STATIC").as_ptr(),
-                    wide("Codex + DeepSeek Harness · Amnezia · Discord · Chrome").as_ptr(),
+                    wide("Codex · Amnezia · Discord · Chrome · DSH · Hermes").as_ptr(),
                     WS_CHILD | WS_VISIBLE,
                     30,
                     56,
@@ -1367,7 +1422,14 @@ unsafe extern "system" fn window_proc(
                     instance,
                     null(),
                 );
-                let positions = [(30, 92), (316, 92), (30, 168), (316, 168)];
+                let positions = [
+                    (30, 92),
+                    (316, 92),
+                    (30, 168),
+                    (316, 168),
+                    (30, 244),
+                    (316, 244),
+                ];
                 for (target, (x, y)) in AppTarget::ALL.into_iter().zip(positions) {
                     let button = CreateWindowExW(
                         0,
@@ -1392,7 +1454,7 @@ unsafe extern "system" fn window_proc(
                     wide("Готово к запуску").as_ptr(),
                     WS_CHILD | WS_VISIBLE,
                     30,
-                    252,
+                    328,
                     556,
                     24,
                     hwnd,
@@ -1411,7 +1473,7 @@ unsafe extern "system" fn window_proc(
                         | ES_AUTOVSCROLL as u32
                         | ES_READONLY as u32,
                     30,
-                    282,
+                    358,
                     556,
                     118,
                     hwnd,
@@ -1499,7 +1561,7 @@ fn run_gui() {
             CW_USEDEFAULT,
             CW_USEDEFAULT,
             634,
-            456,
+            532,
             null_mut(),
             null_mut(),
             instance,
@@ -1577,7 +1639,8 @@ mod tests {
     fn matches_each_target_without_cross_matching() {
         assert!(AppTarget::Codex.matches_process("ChatGPT.exe"));
         assert!(AppTarget::Codex.matches_process("codex-code-mode-host.exe"));
-        assert!(AppTarget::Codex.matches_process("DeepSeekDesktop.exe"));
+        assert!(AppTarget::DeepSeek.matches_process("DeepSeekDesktop.exe"));
+        assert!(AppTarget::Hermes.matches_process("hermes-canary.exe"));
         assert!(AppTarget::Amnezia.matches_process("AmneziaVPN-service.exe"));
         assert!(AppTarget::Amnezia.matches_process("AmneziaWG.exe"));
         assert!(AppTarget::Discord.matches_process("Discord.exe"));
@@ -1585,6 +1648,8 @@ mod tests {
         assert!(!AppTarget::Chrome.matches_process("chromedriver.exe"));
         assert!(!AppTarget::Discord.matches_process("Update.exe"));
         assert!(!AppTarget::Codex.matches_process("Kill-Codex.exe"));
+        assert!(!AppTarget::Codex.matches_process("DeepSeekDesktop.exe"));
+        assert!(!AppTarget::Hermes.matches_process("python.exe"));
         assert!(!AppTarget::Codex.matches_process("DeepSeek.exe"));
     }
 
@@ -1597,6 +1662,14 @@ mod tests {
         assert_eq!(
             parse_args(["app.exe", "--dry-run", "chrome"]),
             Ok(RunMode::DryRun(AppTarget::Chrome))
+        );
+        assert_eq!(
+            parse_args(["app.exe", "--dry-run", "dsh"]),
+            Ok(RunMode::DryRun(AppTarget::DeepSeek))
+        );
+        assert_eq!(
+            parse_args(["app.exe", "--dry-run", "hermes"]),
+            Ok(RunMode::DryRun(AppTarget::Hermes))
         );
         assert_eq!(parse_args(["app.exe"]), Ok(RunMode::Gui));
         assert!(parse_args(["app.exe", "--dry-run", "unknown"]).is_err());
@@ -1638,7 +1711,7 @@ mod tests {
     }
 
     #[test]
-    fn codex_target_includes_deepseek_harness_webview_only() {
+    fn deepseek_target_includes_its_webview_only() {
         let processes = vec![
             ProcessInfo {
                 pid: 30,
@@ -1657,8 +1730,38 @@ mod tests {
             },
         ];
         assert_eq!(
-            target_pids(&processes, AppTarget::Codex, 99),
+            target_pids(&processes, AppTarget::DeepSeek, 99),
             HashSet::from([30, 31])
+        );
+    }
+
+    #[test]
+    fn hermes_target_includes_all_desktop_children_but_not_standalone_agent() {
+        let processes = vec![
+            ProcessInfo {
+                pid: 50,
+                parent_pid: 1,
+                name: "hermes-canary.exe".into(),
+            },
+            ProcessInfo {
+                pid: 51,
+                parent_pid: 50,
+                name: "hermes-canary.exe".into(),
+            },
+            ProcessInfo {
+                pid: 52,
+                parent_pid: 51,
+                name: "python.exe".into(),
+            },
+            ProcessInfo {
+                pid: 60,
+                parent_pid: 1,
+                name: "python.exe".into(),
+            },
+        ];
+        assert_eq!(
+            target_pids(&processes, AppTarget::Hermes, 99),
+            HashSet::from([50, 51, 52])
         );
     }
 
@@ -1846,6 +1949,14 @@ mod tests {
         assert_eq!(
             AppTarget::from_button_id(ID_KILL_CHROME),
             Some(AppTarget::Chrome)
+        );
+        assert_eq!(
+            AppTarget::from_button_id(ID_KILL_DEEPSEEK),
+            Some(AppTarget::DeepSeek)
+        );
+        assert_eq!(
+            AppTarget::from_button_id(ID_KILL_HERMES),
+            Some(AppTarget::Hermes)
         );
         assert_eq!(AppTarget::from_button_id(9999), None);
     }
